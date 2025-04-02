@@ -1,0 +1,142 @@
+services:
+  reverse-proxy:
+    build:
+      context: ./reverse_proxy/
+      dockerfile: Dockerfile
+    # Expose the reverse proxy on localhost port 8000.
+    ports:
+      - "8000:8000"
+    depends_on:
+      - master-1
+      - master-2
+      - master-3
+    networks:
+      - tiny_gfs_internal_network
+
+  master-1:
+    build:
+      context: ./master/
+      dockerfile: Dockerfile
+    # The master script is invoked with a hard-coded host ("master-1")
+    # and the port (8001) passed as an argument.
+    command: python main.py master-1 8001
+    hostname: master-1
+    networks:
+      - tiny_gfs_internal_network
+    volumes:
+      - master1-data:/home/data
+
+  master-2:
+    build:
+      context: ./master/
+      dockerfile: Dockerfile
+    command: python main.py master-2 8002
+    hostname: master-2
+    networks:
+      - tiny_gfs_internal_network
+    volumes:
+      - master2-data:/home/data
+
+  master-3:
+    build:
+      context: ./master/
+      dockerfile: Dockerfile
+    command: python main.py master-3 8003
+    hostname: master-3
+    networks:
+      - tiny_gfs_internal_network
+    volumes:
+      - master3-data:/home/data
+
+  chunk-1:
+    build:
+      context: ./chunkserver/
+      dockerfile: Dockerfile
+    command: python main.py chunk-1 10001
+    hostname: chunk-1
+    networks:
+      - tiny_gfs_internal_network
+    volumes:
+      - chunk1-data:/home/data
+
+  chunk-2:
+    build:
+      context: ./chunkserver/
+      dockerfile: Dockerfile
+    command: python main.py chunk-2 10002
+    hostname: chunk-2
+    networks:
+      - tiny_gfs_internal_network
+    volumes:
+      - chunk1-data:/home/data
+
+  chunk-3:
+    build:
+      context: ./chunkserver/
+      dockerfile: Dockerfile
+    command: python main.py chunk-3 10003
+    hostname: chunk-1
+    networks:
+      - tiny_gfs_internal_network
+    volumes:
+      - chunk1-data:/home/data
+
+  chunk-4:
+    build:
+      context: ./chunkserver/
+      dockerfile: Dockerfile
+    command: python main.py chunk-4 10004
+    hostname: chunk-1
+    networks:
+      - tiny_gfs_internal_network
+    volumes:
+      - chunk1-data:/home/data
+
+  chunk-5:
+    build:
+      context: ./chunkserver/
+      dockerfile: Dockerfile
+    command: python main.py chunk-5 10005
+    hostname: chunk-5
+    networks:
+      - tiny_gfs_internal_network
+    volumes:
+      - chunk1-data:/home/data
+
+  chunk-6:
+    build:
+      context: ./chunkserver/
+      dockerfile: Dockerfile
+    command: python main.py chunk-6 10006
+    hostname: chunk-6
+    networks:
+      - tiny_gfs_internal_network
+    volumes:
+      - chunk1-data:/home/data
+
+  chunk-7:
+    build:
+      context: ./chunkserver/
+      dockerfile: Dockerfile
+    command: python main.py chunk-7 10007
+    hostname: chunk-7
+    networks:
+      - tiny_gfs_internal_network
+    volumes:
+      - chunk1-data:/home/data
+
+networks:
+  tiny_gfs_internal_network:
+    external: true
+
+volumes:
+  master1-data:
+  master2-data:
+  master3-data:
+  chunk1-data:
+  chunk2-data:
+  chunk3-data:
+  chunk4-data:
+  chunk5-data:
+  chunk6-data:
+  chunk7-data:
