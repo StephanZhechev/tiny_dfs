@@ -4,14 +4,15 @@ from fastapi import FastAPI, Response
 from fastapi.responses import JSONResponse
 import uvicorn
 
-from src.master_node import MasterNode, get_chunk_assignment
+from src.master_node import MasterNode, get_chunk_assignment, NoSuchClientError, \
+    NoSuchFileError
 from src.schemas import GetChunkAssignmentRequest, ChunkAssignmentResponse, \
-    LogEntry, WriteConfirmation, DeleteRequest, GCEntry, ListFilesRequest
+    LogEntry, WriteConfirmation, DeleteRequest
 
 CHUNK_SIZE = 65536
 CURRENT_LOG_ID: int # This will be overwritten when the script is run.
 
-logging.basicConfig(level=logging.DEBUG)
+# logging.basicConfig(level=logging.DEBUG)
 
 # Global variable for the master node instance.
 node = None
@@ -20,8 +21,10 @@ node = None
 pending_writes = {}
 # keys are write IDs and values are lists of pending chunk write confirmations.
 pending_confirmations = {}
-# pending entries for garbage collection
-gc: List[GCEntry] = []
+
+# "If in doubt keep em locked" - Austrian proverb.
+PENDING_RESOURCES_LOCK = threading.Lock()
+LOG_ID_LOCK = threading.Lock()
 
 # FastAPI app for exposing the status endpoint.
 app = FastAPI()
@@ -61,8 +64,9 @@ async def chunk_assignment_endpoint(req: GetChunkAssignmentRequest):
 @app.post("/propose_write")
 async def propose_write(proposal: LogEntry):
     global CURRENT_LOG_ID # Without this line, the next line raises ASGI UnboundLocalError.
-    CURRENT_LOG_ID += 1
-    write_id = CURRENT_LOG_ID
+    with LOG_ID_LOCK:
+        CURRENT_LOG_ID += 1
+        write_id = CURRENT_LOG_ID
     timestamp = int(time.time())
 
     entry = {
@@ -75,8 +79,9 @@ async def propose_write(proposal: LogEntry):
         "operation": "write",
         "chunks": [chunk.model_dump() for chunk in proposal.chunks],
     }
-    pending_writes[write_id] = entry
-    pending_confirmations[write_id] = [elem.chunk_id for elem in proposal.chunks]
+    with PENDING_RESOURCES_LOCK:
+        pending_writes[write_id] = entry
+        pending_confirmations[write_id] = [elem.chunk_id for elem in proposal.chunks]
 
     ### Implement proper response. We need to handle rejected proposed writes in case
     # the file already exists.
@@ -88,9 +93,11 @@ async def confirm_write(conf: WriteConfirmation):
     The keys should be present by design.
     If the keys is missing, let the galaxy burn!
     """
-    pending_confirmations[conf.write_id].remove(conf.chunk_id)
+    with PENDING_RESOURCES_LOCK:
+        pending_confirmations[conf.write_id].remove(conf.chunk_id)
     if not len(pending_confirmations[conf.write_id]):
-        entry = pending_writes.pop(conf.write_id)
+        with PENDING_RESOURCES_LOCK:
+            entry = pending_writes.pop(conf.write_id)
         if conf.success:
             # Updates the catalog as well!
             node.append_confirmed_log_entry(entry)
@@ -98,7 +105,27 @@ async def confirm_write(conf: WriteConfirmation):
 
 @app.delete("/delete_file")
 async def handle_delete(req: DeleteRequest):
-    # Needs to be implemented.
+    try:
+        entry = node.catalog.get_entry(req.client, req.filename)
+    except NoSuchClientError:
+        return Response(content="No such client!", status_code=404)
+    except NoSuchFileError:
+        return Response(content="No such file!", status_code=404)
+    node.catalog.delete_file(req.client, req.filename)
+    with LOG_ID_LOCK:
+        CURRENT_LOG_ID += 1
+        write_id = CURRENT_LOG_ID
+    log_entry = {
+        "id": write_id,
+        "client": req.client,
+        "file_name": req.filename,
+        "file_size": entry.file_size,
+        "num_chunks": entry.num_chunks,
+        "timestamp": entry.timestamp,
+        "operation": "delete",
+        "chunks": entry.chunks,
+    }   
+    node.append_confirmed_log_entry(log_entry)
     return Response(content="File deleted successfully", status_code=200)
 
 @app.get("/list_files")
@@ -106,6 +133,16 @@ async def handle_list_files(client: str) -> List[str]:
     if not client in node.catalog.index:
         return JSONResponse(status_code=504, content={"details": f"client not found: {client}"})
     return list(node.catalog.index[client].keys())
+
+@app.get("/get_catalog_entry")
+async def handle_get_file(client: str, filename: str) -> dict:
+    try:
+        entry = node.catalog.get_entry(client, filename)
+    except NoSuchClientError:
+        return Response(content="No such client!", status_code=404)
+    except NoSuchFileError:
+        return Response(content="No such file!", status_code=404)
+    return entry
 
 def run_api():
     uvicorn.run(app, host="0.0.0.0", port=9000)
@@ -148,4 +185,4 @@ if __name__ == "__main__":
         # Only snapshot the catalog once every cycle.
         node.catalog.take_snapshot()
         node.gc.run()
-        time.sleep(20)
+        time.sleep(10)

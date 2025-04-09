@@ -16,7 +16,7 @@ async def create_session():
     return aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30), connector=connector)
 
 @retry(stop=stop_after_attempt(5), wait=wait_exponential(multiplier=1, min=4, max=10))
-async def fetch_data(replica, chunk_id, data):
+async def replicate_data(replica, chunk_id, data):
     async with await create_session() as session:
         res = await session.post(
             f"{replica}/store_replica",
@@ -106,7 +106,6 @@ async def store_chunk(req: StoreChunkRequest):
             )
             for replica in req.replicas
         ]
-    tasks = [fetch_data(replica, req.chunk_id, req.data) for replica in req.replicas]
     results = await asyncio.gather(*tasks, return_exceptions=True)
     master_confirmation_payload = {
         "write_id": req.write_id,
@@ -154,6 +153,17 @@ async def store_replica(chunk: ReplicaChunk):
     with open(path, "w", encoding="utf-8") as f:
         f.write(chunk.data)
     return Response(content="success", status_code=200)
+
+@app.get("/get_chunk")
+async def handler_get_chunk(chunk_id) -> dict:
+    path = os.path.join(DATA_DIR, chunk_id)
+    with open(path, "r", encoding="utf-8") as f:
+        data = f.read()
+    return {
+        "chunk_id": chunk_id,
+        "data": data,
+    }
+    
 
 @app.delete("/delete-chunks")
 async def delete_chunks(request: FileDeleteRequest):

@@ -26,12 +26,6 @@ class tinyGFSClient():
     def getStatus(self):
         return requests.get(self._buildURL("status"))
     
-    def getFile():
-        pass
-
-    def getFileCatalog():
-        pass
-
     async def uploadFile(
             self,
             obj: str,
@@ -94,6 +88,13 @@ class tinyGFSClient():
             return response.json()
         except:
             print("Something went wrong!")
+
+    def getFile(self, filename: str):
+        url = self._buildURL("get_file")
+        url += f"?client={self.client_name}&filename={filename}"
+        response = httpx.get(url)
+        response.raise_for_status()
+        return response.json()
         
     def _getChunkAssignment(
             self,

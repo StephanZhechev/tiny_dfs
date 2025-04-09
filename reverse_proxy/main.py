@@ -21,6 +21,10 @@ class UploadRequest(BaseModel):
     num_chunks: int
     chunks: List[ChunkUpload]
 
+class FileRequest(BaseModel):
+    client: str
+    filename: str
+
 app = FastAPI(docs_url=None, openapi_url=None)
 
 CHUNK_SERVERS = [
@@ -132,6 +136,28 @@ async def list_files_handler(client: str):
     res = httpx.get(f"http://{leader_address}/list_files?client={client}")
     return res.json()
 
+@app.get("/get_file")
+async def handler_get_file(client: str, filename: str) -> dict:
+    """
+    We only query primary chunk servers because we are lazy at this point.
+    """
+    leader_address = await get_leader()
+    if leader_address is None:
+        return Response("No leader elected yet", status_code=503)
+    get_req = f"http://{leader_address}/{"get_catalog_entry"}"
+    get_req += f"?client={client}&filename={filename}"
+    response = httpx.get(get_req)
+    if not response.json()["chunks"]:
+        return Response(content="No chunks detected", status_code=404)
+    res = {}
+    for chunk in response.json()["chunks"]:
+        print("First query chunk servers for their health and send request to the first one")
+        get_url = f"{matchChunkServer(chunk["primary"])}/get_chunk"
+        get_url += f"?chunk_id={chunk["chunk_id"]}"
+        fetched = httpx.get(get_url)
+        res[fetched["chunk_id"]] = fetched["data"]
+    return res
+
 @app.api_route("/{path:path}", methods=["GET", "POST", "DELETE"])
 async def proxy(path: str, request: Request):
     leader_address = await get_leader()
@@ -156,7 +182,6 @@ async def proxy(path: str, request: Request):
         except Exception as e:
             logging.exception("Error forwarding request")
             return Response(f"Error forwarding request: {e}", status_code=500)
-    
     return Response(content=resp.content, status_code=resp.status_code, headers=dict(resp.headers))
 
 if __name__ == '__main__':

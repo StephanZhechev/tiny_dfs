@@ -27,8 +27,18 @@ class InMemoryCatalog:
                 self.index = json.load(fp)
         except:
             self.index = {}
+    
+    def get_entry(self, client: str, filename: str) -> dict:
+        if not client in self.index:
+            raise NoSuchClientError(client)
+        if not filename in self.index[client]:
+            raise NoSuchFileError(filename)
+        return self.index[client][filename]
 
     def add_file(self, log_entry: LogEntry):
+        """
+        Keeps as a synchronous method to avoid using locks.
+        """
         if log_entry.client not in self.index:
             self.index[log_entry.client] = {}
         self.index[log_entry.client][log_entry.file_name] = {
@@ -38,7 +48,10 @@ class InMemoryCatalog:
             "chunks": [elem.model_dump() for elem in log_entry.chunks],
         }
 
-    def delete_file(self, client, filename) -> None:
+    def delete_file(self, client: str, filename: str) -> None:
+        """
+        Keeps as a synchronous method to avoid using locks.
+        """
         if not client in self.index:
             self.index[client] = {}
             raise NoSuchClientError(client)
@@ -130,7 +143,7 @@ class MasterNode(SyncObj):
             open(log_file, 'w').close()
 
     @replicated
-    def append_confirmed_log_entry(self, entry):
+    def append_confirmed_log_entry(self, entry: dict):
         """
         This method appends a confirmed log entry to the in-memory log
         and writes it to the persistent JSONL file.
@@ -149,14 +162,16 @@ class GarbageCollector:
 
     def __init__(self):
         self.gc_queue = self._init_queue()
-        self.lock = threading.Lock()
 
     def add_to_gc(self, chunk_server: str, chunk_id: str):
         """
         No error handling in case a wrong chunk server is passed.
+        We pass global_lock because if we create a lock as a class field,
+        the pysyncobj library raises an error during replication.
+        
+        Keeps as a synchronous method to avoid using locks!
         """
-        with self.lock:
-            self.gc_queue[chunk_server].append(chunk_id)
+        self.gc_queue[chunk_server].append(chunk_id)
 
     def run(self):
         """
@@ -166,16 +181,15 @@ class GarbageCollector:
         """
         logging.info("Running GC...")
         for task in self.gc_queue:
-            with self.lock:
-                try:
-                    r = httpx.delete(
-                        task["url"],
-                        json={"files": task["files"]},
-                        timeout=5
-                    )
-                    self.gc_queue.remove(task)
-                except:
-                    pass
+            try:
+                r = httpx.delete(
+                    task["url"],
+                    json={"files": task["files"]},
+                    timeout=5
+                )
+                self.gc_queue.remove(task)
+            except:
+                pass
 
     def _init_queue(self):
         """
