@@ -1,7 +1,7 @@
 *.code-workspace
 
-spark_venv/
+dfs/
 
 *.ipynb
 
-*/__pycache__/*
+*/__pycache__/
