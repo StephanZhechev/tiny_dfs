@@ -109,9 +109,9 @@ async def handle_delete(client, filename):
     try:
         entry = node.catalog.get_entry(client, filename)
     except NoSuchClientError:
-        return Response(content="No such client!", status_code=507)
+        return Response(content="No such client!", status_code=597)
     except NoSuchFileError:
-        return Response(content="No such file!", status_code=508)
+        return Response(content="No such file!", status_code=598)
     node.catalog.delete_file(client, filename)
     with LOG_ID_LOCK:
         CURRENT_LOG_ID += 1

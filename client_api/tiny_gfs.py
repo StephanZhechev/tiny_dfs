@@ -85,6 +85,17 @@ class tinyGFSClient():
         response = httpx.get(url)
         response.raise_for_status()
         return response.json()
+    
+    def getCatalogEntry(self, filename: str):
+        """
+        This is for debugging purposes. Of course, in a real-world system,
+        the user is not supposed to be able to query internal information like this.
+        """
+        url = f"{self._buildURL("get_catalog_entry")}?client={self.client_name}"
+        url += f"&filename={filename}"
+        response = httpx.get(url)
+        response.raise_for_status()
+        return response.json()
 
     def deleteFile(self, filename: str) -> None:
         url = f"{self._buildURL("delete_file")}?client={self.client_name}&filename={filename}"

@@ -155,8 +155,14 @@ class MasterNode(SyncObj):
         with open(self.master_log_path, 'a') as f:
             f.write(json.dumps(entry) + "\n")
         # Alters the catalog!
-        self.catalog.add_file(LogEntry.model_validate(entry))
-
+        if entry["operation"]=="write":
+            self.catalog.add_file(LogEntry.model_validate(entry))
+        elif entry["operation"]=="delete":
+            if entry["client"] in self.catalog.index:
+                if entry["file_name"] in self.catalog.index[entry["client"]]:
+                    self.catalog.delete_file(entry["client"], entry["file_name"])
+        else:
+            raise ValueError("Only write and delete operations are accepted!")
 
 class GarbageCollector:
 
