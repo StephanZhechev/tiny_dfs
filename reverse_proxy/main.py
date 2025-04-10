@@ -6,7 +6,7 @@ from fastapi import FastAPI, Request, Response
 import aiohttp
 import asyncio
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 
 class ChunkUpload(BaseModel):
     chunk_id: str
@@ -54,7 +54,7 @@ async def get_leader():
             try:
                 resp = await client.get(url, timeout=1.0)
                 data = resp.json()
-                logging.debug(f"Got response from {url}: {data}")
+                logging.info(f"Got response from {url}: {data}")
                 if data.get("isLeader", False):
                     # Return the master's API address (port 9000) for forwarding.
                     if "master-1" in url:
@@ -64,7 +64,7 @@ async def get_leader():
                     elif "master-3" in url:
                         return "master-3:9000"
             except Exception as e:
-                logging.debug(f"Error contacting {url}: {e}")
+                logging.info(f"Error contacting {url}: {e}")
                 continue
     return None
 
@@ -142,6 +142,7 @@ async def handler_get_file(client: str, filename: str) -> List[str]:
     We only query primary chunk servers because we are lazy at this point.
 
     Quite messy and inefficient but it works.
+    NB: We only try to contact chunk servers once without retries.
     """
     leader_address = await get_leader()
     if leader_address is None:
@@ -153,8 +154,17 @@ async def handler_get_file(client: str, filename: str) -> List[str]:
         return Response(content="No chunks detected", status_code=503)
     res = []
     for chunk in response.json()["chunks"]:
-        print("First query chunk servers for their health and send request to the first one")
-        get_url = f"{matchChunkServer(chunk["primary"])}/get_chunk"
+        curr_chunk_server = None
+        async with httpx.AsyncClient() as client:
+            for cs in [chunk["primary"]] + chunk["replicas"]:
+                health_url = f"{matchChunkServer(chunk["primary"])}/health"
+                resp = await client.get(health_url, timeout=1.0)
+                if resp.json().get("status", "not_ok") == "ok":
+                    curr_chunk_server = cs
+                    break
+        if not curr_chunk_server:
+            return Response(content="Cannot establish connection to chunk servers", status_code=500)
+        get_url = f"{matchChunkServer(cs)}/get_chunk"
         get_url += f"?chunk_id={chunk["chunk_id"]}"
         fetched = httpx.get(get_url)
         fetched = fetched.json()
@@ -170,7 +180,7 @@ async def proxy(path: str, request: Request):
         return Response("No leader elected yet", status_code=503)
     
     target_url = f"http://{leader_address}/{path}"
-    logging.debug(f"Forwarding request for /{path} to {target_url}")
+    logging.info(f"Forwarding request for /{path} to {target_url}")
     
     async with httpx.AsyncClient() as client:
         try:
@@ -182,6 +192,8 @@ async def proxy(path: str, request: Request):
                 except Exception:
                     body = None
                 resp = await client.post(target_url, json=body)
+            elif request.method == "DELETE":
+                resp = await client.delete(target_url, params=request.query_params)
             else:
                 return Response("Method Not Allowed", status_code=405)
         except Exception as e:

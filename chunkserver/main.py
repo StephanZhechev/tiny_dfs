@@ -8,6 +8,8 @@ import aiohttp
 import asyncio
 from tenacity import retry, stop_after_attempt, wait_exponential
 
+logging.basicConfig(level=logging.INFO)
+
 async def create_session():
     """
     Create a juiced-up aiohttp connection that will be shared across chunk storage tasks.
@@ -44,7 +46,7 @@ async def get_leader():
             try:
                 resp = await client.get(url, timeout=1.0)
                 data = resp.json()
-                logging.debug(f"Got response from {url}: {data}")
+                logging.info(f"Got response from {url}: {data}")
                 if data.get("isLeader", False):
                     # Return the master's API address (port 9000) for forwarding.
                     if "master-1" in url:
@@ -54,7 +56,7 @@ async def get_leader():
                     elif "master-3" in url:
                         return "master-3:9000"
             except Exception as e:
-                logging.debug(f"Error contacting {url}: {e}")
+                logging.info(f"Error contacting {url}: {e}")
                 continue
     return None
 
@@ -106,7 +108,7 @@ async def store_chunk(req: StoreChunkRequest):
             )
             for replica in req.replicas
         ]
-    results = await asyncio.gather(*tasks, return_exceptions=True)
+        results = await asyncio.gather(*tasks, return_exceptions=True)
     master_confirmation_payload = {
         "write_id": req.write_id,
         "chunk_id": req.chunk_id,

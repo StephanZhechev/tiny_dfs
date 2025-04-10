@@ -12,7 +12,7 @@ from src.schemas import GetChunkAssignmentRequest, ChunkAssignmentResponse, \
 CHUNK_SIZE = 65536
 CURRENT_LOG_ID: int # This will be overwritten when the script is run.
 
-# logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 
 # Global variable for the master node instance.
 node = None
@@ -104,26 +104,27 @@ async def confirm_write(conf: WriteConfirmation):
     return Response(content="success", status_code=200)
 
 @app.delete("/delete_file")
-async def handle_delete(req: DeleteRequest):
+async def handle_delete(client, filename):
+    global CURRENT_LOG_ID
     try:
-        entry = node.catalog.get_entry(req.client, req.filename)
+        entry = node.catalog.get_entry(client, filename)
     except NoSuchClientError:
-        return Response(content="No such client!", status_code=503)
+        return Response(content="No such client!", status_code=507)
     except NoSuchFileError:
-        return Response(content="No such file!", status_code=503)
-    node.catalog.delete_file(req.client, req.filename)
+        return Response(content="No such file!", status_code=508)
+    node.catalog.delete_file(client, filename)
     with LOG_ID_LOCK:
         CURRENT_LOG_ID += 1
-        write_id = CURRENT_LOG_ID
+        log_id = CURRENT_LOG_ID
     log_entry = {
-        "id": write_id,
-        "client": req.client,
-        "file_name": req.filename,
-        "file_size": entry.file_size,
-        "num_chunks": entry.num_chunks,
-        "timestamp": entry.timestamp,
+        "id": log_id,
+        "client": client,
+        "file_name": filename,
+        "file_size": entry["file_size"],
+        "num_chunks": entry["num_chunks"],
+        "timestamp": entry["timestamp"],
         "operation": "delete",
-        "chunks": entry.chunks,
+        "chunks": entry["chunks"],
     }
     node.append_confirmed_log_entry(log_entry)
     return Response(content="File deleted successfully", status_code=200)
@@ -139,9 +140,9 @@ async def handle_get_file(client: str, filename: str) -> dict:
     try:
         entry = node.catalog.get_entry(client, filename)
     except NoSuchClientError:
-        return Response(content="No such client!", status_code=503)
+        return Response(content="No such client!", status_code=557)
     except NoSuchFileError:
-        return Response(content="No such file!", status_code=503)
+        return Response(content="No such file!", status_code=558)
     return entry
 
 def run_api():
