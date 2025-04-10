@@ -50,7 +50,7 @@ class tinyGFSClient():
                         file_size=len(serialized),
                     )
                     assert chunk_assignment is not None, "Failed chunk assignment"
-                    chunks = self.split_to_chunks(serialized, chunk_assignment['chunk_size'])
+                    chunks = self.split_to_chunks(serialized, chunk_assignment["chunk_size"])
                     assert len(chunks)==len(chunk_assignment['chunk_assignment']), "Non-matching number of chunks!"
                     chunks_payload = []
                     for chunk, assign in zip(chunks, chunk_assignment['chunk_assignment']):
@@ -94,7 +94,7 @@ class tinyGFSClient():
         url += f"?client={self.client_name}&filename={filename}"
         response = httpx.get(url)
         response.raise_for_status()
-        return response.json()
+        return self._reconstruct_from_chunks(response.json())
         
     def _getChunkAssignment(
             self,
@@ -132,9 +132,8 @@ class tinyGFSClient():
         chunks = [json_bytes[i:i+chunk_size] for i in range(0, len(json_bytes), chunk_size)]
         return chunks
 
-    def reconstruct_from_chunks(self, chunks):
-        data = b''.join(chunks)
-        return json.loads(data.decode('utf-8'))
+    def _reconstruct_from_chunks(self, chunks):
+        return "".join([self._unserializeJSON(elem) for elem in chunks])
     
 
     def _serializeJSON(self, s: str) -> str:

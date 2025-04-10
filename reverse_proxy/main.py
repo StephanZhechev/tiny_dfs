@@ -1,4 +1,4 @@
-import logging
+import logging, re
 from typing import List
 import httpx
 from pydantic import BaseModel
@@ -137,9 +137,11 @@ async def list_files_handler(client: str):
     return res.json()
 
 @app.get("/get_file")
-async def handler_get_file(client: str, filename: str) -> dict:
+async def handler_get_file(client: str, filename: str) -> List[str]:
     """
     We only query primary chunk servers because we are lazy at this point.
+
+    Quite messy and inefficient but it works.
     """
     leader_address = await get_leader()
     if leader_address is None:
@@ -148,15 +150,18 @@ async def handler_get_file(client: str, filename: str) -> dict:
     get_req += f"?client={client}&filename={filename}"
     response = httpx.get(get_req)
     if not response.json()["chunks"]:
-        return Response(content="No chunks detected", status_code=404)
-    res = {}
+        return Response(content="No chunks detected", status_code=503)
+    res = []
     for chunk in response.json()["chunks"]:
         print("First query chunk servers for their health and send request to the first one")
         get_url = f"{matchChunkServer(chunk["primary"])}/get_chunk"
         get_url += f"?chunk_id={chunk["chunk_id"]}"
         fetched = httpx.get(get_url)
-        res[fetched["chunk_id"]] = fetched["data"]
-    return res
+        fetched = fetched.json()
+        chunk_number = int(re.search(r"\d+$", fetched["chunk_id"]).group())
+        res.append((chunk_number, fetched["data"]))
+    res.sort(key=lambda elem: elem[0])
+    return [elem[1] for elem in res]
 
 @app.api_route("/{path:path}", methods=["GET", "POST", "DELETE"])
 async def proxy(path: str, request: Request):

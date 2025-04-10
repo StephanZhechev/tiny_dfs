@@ -83,7 +83,7 @@ async def propose_write(proposal: LogEntry):
         pending_writes[write_id] = entry
         pending_confirmations[write_id] = [elem.chunk_id for elem in proposal.chunks]
 
-    ### Implement proper response. We need to handle rejected proposed writes in case
+    # TODO: Implement proper response. We need to handle rejected proposed writes in case
     # the file already exists.
     return {"write_id": write_id}
 
@@ -108,9 +108,9 @@ async def handle_delete(req: DeleteRequest):
     try:
         entry = node.catalog.get_entry(req.client, req.filename)
     except NoSuchClientError:
-        return Response(content="No such client!", status_code=404)
+        return Response(content="No such client!", status_code=503)
     except NoSuchFileError:
-        return Response(content="No such file!", status_code=404)
+        return Response(content="No such file!", status_code=503)
     node.catalog.delete_file(req.client, req.filename)
     with LOG_ID_LOCK:
         CURRENT_LOG_ID += 1
@@ -124,7 +124,7 @@ async def handle_delete(req: DeleteRequest):
         "timestamp": entry.timestamp,
         "operation": "delete",
         "chunks": entry.chunks,
-    }   
+    }
     node.append_confirmed_log_entry(log_entry)
     return Response(content="File deleted successfully", status_code=200)
 
@@ -139,9 +139,9 @@ async def handle_get_file(client: str, filename: str) -> dict:
     try:
         entry = node.catalog.get_entry(client, filename)
     except NoSuchClientError:
-        return Response(content="No such client!", status_code=404)
+        return Response(content="No such client!", status_code=503)
     except NoSuchFileError:
-        return Response(content="No such file!", status_code=404)
+        return Response(content="No such file!", status_code=503)
     return entry
 
 def run_api():
