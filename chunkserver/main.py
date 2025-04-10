@@ -94,7 +94,8 @@ async def store_chunk(req: StoreChunkRequest):
     is responsible for forwarding the chunk to the replicas, collecting the information whether
     the replication was successful, and forwarding this information to the master.
 
-    NB: Does not allow for partial replication of chunks. If anything fails, it fails too.
+    NB: Allows for partial replication of chunks. In a real-world system, additional
+        replication would be run as an asynchronous job.
     """
     path = os.path.join(DATA_DIR, req.chunk_id)
     with open(path, "w", encoding="utf-8") as f:
@@ -120,7 +121,7 @@ async def store_chunk(req: StoreChunkRequest):
     leader_url = f"http://{leader_address}"
 
     async with await create_session() as session:
-        if any(isinstance(r, Exception) or r.status != 200 for r in results):
+        if all(isinstance(r, Exception) or r.status != 200 for r in results):
             for r in results:
                 if isinstance(r, Exception):
                     logging.error("ClientConnectorError occurred: %s", r)
@@ -132,7 +133,7 @@ async def store_chunk(req: StoreChunkRequest):
                 f"{leader_url}{"/confirm_write"}",
                 json=master_confirmation_payload
             )
-            return Response(content="replication_failed", status_code=500)
+            return Response(content="replication_failed", status_code=599)
         else:
             confirmation_response = await session.post(
                 f"{leader_url}{"/confirm_write"}",
@@ -141,7 +142,7 @@ async def store_chunk(req: StoreChunkRequest):
             if confirmation_response.status == 200:
                 return Response(content="success", status_code=200)
             else:
-                return Response(content="failed", status_code=500)
+                return Response(content="failed", status_code=598)
 
 @app.post("/store_replica")
 async def store_replica(chunk: ReplicaChunk):

@@ -95,7 +95,7 @@ class tinyGFSClient():
     def getFile(self, filename: str):
         url = self._buildURL("get_file")
         url += f"?client={self.client_name}&filename={filename}"
-        response = httpx.get(url)
+        response = httpx.get(url, timeout=10)
         response.raise_for_status()
         return self._reconstruct_from_chunks(response.json())
         
