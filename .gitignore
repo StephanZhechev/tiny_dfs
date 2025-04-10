@@ -4,5 +4,4 @@ spark_venv/
 
 *.ipynb
 
-__pycache__/*
-client_api/__pycache__/*
+*/__pycache__/*
