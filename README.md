@@ -22,6 +22,13 @@ I work in Ubuntu 24.04 and manage all deployments using docker compose. Install 
 sudo apt install docker-compose-plugin
 ```
 
+Create the docker network separately:
+
+```
+docker network create --driver=bridge --opt com.docker.network.driver.mtu=1450 tiny_dfs_internal_network
+```
+
+
 
 # tinyDFS: Notes about implementation detais and desingn shortcomings
 

@@ -126,7 +126,7 @@ services:
       - chunk1-data:/home/data
 
 networks:
-  tiny_gfs_internal_network:
+  tiny_dfs_internal_network:
     external: true
 
 volumes:
