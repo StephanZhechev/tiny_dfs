@@ -31,7 +31,7 @@ class tinyGFSClient():
             obj: str,
             file_name: str,
             retries: int=10
-        ) -> None:
+        ) -> bool:
         """
         Will retry the upload a few times.
 
@@ -71,13 +71,23 @@ class tinyGFSClient():
                     if resp.status_code != 200:
                         print("Upload failed:", resp.status_code, resp.text)
                     else:
-                        print("Upload successful:", resp.text)
-                        return resp
+                        print("Initial upload successful:", resp.text)
+                        break
                 except ChunkAssignmentFailError:
                     chunk_assignment = None
                     continue
             except httpx.ReadTimeout:
                 continue
+        for _ in range(retries):
+            all_files = self.listFiles()
+            if not file_name in all_files:
+                continue
+            else:
+                print("Log replication successful.")
+                return True
+        print("Log replication failed. Write is rejected.")
+        return False
+
 
     def listFiles(self):
         url = f"{self._buildURL("list_files")}?client={self.client_name}"
@@ -96,11 +106,19 @@ class tinyGFSClient():
         response.raise_for_status()
         return response.json()
 
-    def deleteFile(self, filename: str) -> None:
+    def deleteFile(self, filename: str, retries: int=10) -> None:
         url = f"{self._buildURL("delete_file")}?client={self.client_name}&filename={filename}"
         response = httpx.delete(url)
         response.raise_for_status()
-        return response
+        for _ in range(retries):
+            all_files = self.listFiles()
+            if filename in all_files:
+                continue
+            else:
+                print("Log replication successful.")
+                return True
+        print("Replication failed. Delete is rejected.")
+        return False
 
     def getFile(self, filename: str):
         url = self._buildURL("get_file")

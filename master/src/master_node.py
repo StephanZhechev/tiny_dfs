@@ -1,5 +1,5 @@
 from typing import List
-import json, os, logging, random, json, threading
+import json, os, logging, random, json, asyncio
 import httpx
 from fastapi import HTTPException
 from pysyncobj import SyncObj, SyncObjConf, replicated
@@ -142,6 +142,7 @@ class MasterNode(SyncObj):
         if not os.path.exists(log_file):
             open(log_file, 'w').close()
 
+    # @replicated(callback=lambda success: MasterNode._replication_callback(success))
     @replicated
     def append_confirmed_log_entry(self, entry: dict):
         """
@@ -163,6 +164,33 @@ class MasterNode(SyncObj):
                     self.catalog.delete_file(entry["client"], entry["file_name"])
         else:
             raise ValueError("Only write and delete operations are accepted!")
+
+    async def async_append_confirmed_log_entry(self, entry: dict):
+        """
+        Asynchronous wrapper that handles failed replication.
+
+        We are not using it but it illustrates one way to deal with
+        failed replications.
+        """
+        future = asyncio.Future()
+        def on_replication_complete(success, **kwargs):
+            if success:
+                future.set_result({"success": True})
+            else:
+                error = kwargs.get('error', 'Unknown error')
+                future.set_result({"success": False, "error": str(error)})
+        self.append_confirmed_log_entry(entry, callback=on_replication_complete)
+        return await future
+        
+    @staticmethod
+    def _replication_callback(success: int):
+        """
+        Callback function that simply returns the success status of the replication.
+        Replication is asynchronous and this function and this is a robust way to handle
+        failures.
+        NB: success is an integer!
+        """
+        return success==0
 
 class GarbageCollector:
 

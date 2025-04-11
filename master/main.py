@@ -7,7 +7,7 @@ import uvicorn
 from src.master_node import MasterNode, get_chunk_assignment, NoSuchClientError, \
     NoSuchFileError
 from src.schemas import GetChunkAssignmentRequest, ChunkAssignmentResponse, \
-    LogEntry, WriteConfirmation, DeleteRequest
+    LogEntry, WriteConfirmation
 
 CHUNK_SIZE = 65536
 CURRENT_LOG_ID: int # This will be overwritten when the script is run.
@@ -106,16 +106,15 @@ async def confirm_write(conf: WriteConfirmation):
 @app.delete("/delete_file")
 async def handle_delete(client, filename):
     global CURRENT_LOG_ID
+    with LOG_ID_LOCK:
+        CURRENT_LOG_ID += 1
+        log_id = CURRENT_LOG_ID
     try:
         entry = node.catalog.get_entry(client, filename)
     except NoSuchClientError:
         return Response(content="No such client!", status_code=597)
     except NoSuchFileError:
         return Response(content="No such file!", status_code=598)
-    node.catalog.delete_file(client, filename)
-    with LOG_ID_LOCK:
-        CURRENT_LOG_ID += 1
-        log_id = CURRENT_LOG_ID
     log_entry = {
         "id": log_id,
         "client": client,
@@ -127,6 +126,7 @@ async def handle_delete(client, filename):
         "chunks": entry["chunks"],
     }
     node.append_confirmed_log_entry(log_entry)
+    node.catalog.delete_file(client, filename)
     return Response(content="File deleted successfully", status_code=200)
 
 @app.get("/list_files")
