@@ -18,6 +18,15 @@ def run_demo():
     res = client.uploadFile(ls, "ls")
     print("Uploading list response", res)
 
+    print("Listing files:")
+    print(client.listFiles())
+
+    client.deleteFile("df")
+    print("Deleted df")
+
+    print("Listing files:")
+    print(client.listFiles())
+
 if __name__ == "__main__":
     run_demo()
     print("The end")

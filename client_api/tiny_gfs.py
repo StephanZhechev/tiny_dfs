@@ -1,4 +1,4 @@
-import requests, base64
+import base64
 from typing import List
 import httpx
 
@@ -24,9 +24,9 @@ class tinyGFSClient():
         assert self.getStatus().status_code == 200, "API status code not 200!"
 
     def getStatus(self):
-        return requests.get(self._buildURL("status"))
+        return httpx.get(self._buildURL("status"))
     
-    async def uploadFile(
+    def uploadFile(
             self,
             obj: str,
             file_name: str,
@@ -67,13 +67,12 @@ class tinyGFSClient():
                         "num_chunks": len(chunks),
                         "chunks": chunks_payload,
                     }
-                    async with httpx.AsyncClient(timeout=1) as client:
-                        resp = await client.post(self._buildURL("upload"), json=payload)
-                        if resp.status_code != 200:
-                            print("Upload failed:", resp.status_code, resp.text)
-                        else:
-                            print("Upload successful:", resp.text)
-                            return resp
+                    resp = httpx.post(self._buildURL("upload"), json=payload, timeout=1)
+                    if resp.status_code != 200:
+                        print("Upload failed:", resp.status_code, resp.text)
+                    else:
+                        print("Upload successful:", resp.text)
+                        return resp
                 except ChunkAssignmentFailError:
                     chunk_assignment = None
                     continue
@@ -100,8 +99,8 @@ class tinyGFSClient():
     def deleteFile(self, filename: str) -> None:
         url = f"{self._buildURL("delete_file")}?client={self.client_name}&filename={filename}"
         response = httpx.delete(url)
-        return response
         response.raise_for_status()
+        return response
 
     def getFile(self, filename: str):
         url = self._buildURL("get_file")
@@ -122,7 +121,7 @@ class tinyGFSClient():
         :param file_size: file size in bytes.
         :param chunk_cnt:
         """
-        response = requests.post(
+        response = httpx.post(
             url=self._buildURL("get_chunk_assignment"),
             json = {
                 "client_name": self.client_name,
