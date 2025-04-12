@@ -1,3 +1,3 @@
-from .tiny_gfs import tinyGFSClient
+from .tiny_dfs import tinyGFSClient
 
 __all__ = ['tinyGFSClient']
