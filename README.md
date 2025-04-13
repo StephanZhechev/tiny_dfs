@@ -3,6 +3,8 @@
 This is a functional stripped down distributed file system with many similarities to GFS and HDFS written in python for educational purpose.
 You can find a detailed explanation of the system here: (TODO: add the link)
 
+**Disclaimer:** The code is messy but I couldn't gather enough motivation to polish it.
+
 ### Goal
 
 1. To get a taste of the complexity and details of a real-world distributed system.
