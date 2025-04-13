@@ -1,7 +1,7 @@
 # TinyDFS
 
 This is a functional stripped down distributed file system with many similarities to GFS and HDFS written in python for educational purpose.
-You can find a detailed explanation of the system here: (TODO: add the link)
+You can find a detailed explanation of the system here: [medium article](https://medium.com/@stephan.zhechev/tinydfs-an-educational-distributed-file-system-3892c3069030)
 
 **Disclaimer:** The code is messy but I couldn't gather enough motivation to polish it.
 
